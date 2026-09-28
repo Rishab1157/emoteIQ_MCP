@@ -1,633 +1,258 @@
-# google-play-scraper [![workflow](https://github.com/facundoolano/google-play-scraper/actions/workflows/tests.yml/badge.svg)](https://github.com/facundoolano/google-play-scraper/actions/workflows/tests.yml)
-Node.js module to scrape application data from the Google Play store.
+# emoteIQ Reviews
 
-⚠️ I don't use or actively maintain this project anymore, other than reviewing community provided PRs. Expect the parser to break when Google Play's layout changes.
+An MCP server that fetches app reviews in batches for AI agents, plus a CrewAI agent that uses it.
 
-### Related projects
+An agent asks for reviews (for example 1,000 Brawl Stars reviews, 50 at a time). The server fetches them from Google Play in the background, keeps the exact responses in MongoDB, parses them into one common review shape, and hands the agent one batch per `get_batch` call. Every request and every failure is logged to Kafka under the job ID.
 
-* [app-store-scraper](https://github.com/facundoolano/app-store-scraper): a scraper with a similar interface for the iTunes app store.
-* [aso](https://github.com/facundoolano/aso): an App Store Optimization module built on top of this library.
-* [google-play-api](https://github.com/facundoolano/google-play-api): a RESTful API to consume the data produced by this library.
-
-## Installation
 ```
-npm install google-play-scraper
+emoteIQ_MCP/
+├── emoteIQ_MCP/        MCP server (Python 3.14, uv project)
+├── emoteIQ_Agent/      CrewAI agent for end-to-end testing (Python 3.13, uv project)
+└── .vscode/launch.json Debug configs: "MCP Server", "Agent", "MCP Server + Agent"
 ```
 
-## Usage
-Available methods:
-- [app](#app): Retrieves the full detail of an application.
-- [list](#list): Retrieves a list of applications from one of the collections at Google Play.
-- [search](#search): Retrieves a list of apps that results of searching by the given term.
-- [developer](#developer): Returns the list of applications by the given developer name.
-- [suggest](#suggest): Given a string returns up to five suggestion to complete a search query term.
-- [reviews](#reviews): Retrieves a page of reviews for a specific application.
-- [similar](#similar): Returns a list of similar apps to the one specified.
-- [permissions](#permissions): Returns the list of permissions an app has access to.
-- [datasafety](#datasafety): Returns the data safety information of an app.
-- [categories](#categories): Retrieve a full list of categories present from dropdown menu on Google Play.
+---
 
-### app
+## 1. Run it
 
-Retrieves the full detail of an application. Options:
+**You need:** Docker Desktop running, [uv](https://docs.astral.sh/uv/), and the Ollama server the agent uses (`http://192.168.3.90:11434`, model `qwen2.5:14b`).
 
-* `appId`: the Google Play id of the application (the `?id=` parameter on the url).
-* `lang` (optional, defaults to `'en'`): the two letter language code in which to fetch the app page.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the applications. Needed when the app is available only in some countries.
+```powershell
+# 1. MongoDB + Kafka (once; they keep running)
+cd emoteIQ_MCP
+docker compose up -d
 
-Example:
+# 2. MCP server  ->  http://127.0.0.1:8000/mcp
+uv run python -m emoteIQ_reviews.McpServer
 
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.app({appId: 'com.google.android.apps.translate'})
-  .then(console.log, console.log);
-```
-Results:
-
-```javascript
-{
-  title: 'Google Translate',
-  description: 'Translate between 103 languages by typing\r\n...' ,
-  descriptionHTML: 'Translate between 103 languages by typing<br>...',
-  summary: 'The world is closer than ever with over 100 languages',
-  installs: '500,000,000+',
-  minInstalls: 500000000,
-  maxInstalls: 898626813,
-  score: 4.482483,
-  scoreText: '4.5',
-  ratings: 6811669,
-  reviews: 1614618,
-  histogram: { '1': 370042, '2': 145558, '3': 375720, '4': 856865, '5': 5063481 },
-  price: 0,
-  free: true,
-  currency: 'USD',
-  priceText: 'Free',
-  offersIAP: false,
-  IAPRange: undefined,
-  androidVersion: 'VARY',
-  androidVersionText: 'Varies with device',
-  androidMaxVersion: 'VARY',
-  developer: 'Google LLC',
-  developerId: '5700313618786177705',
-  developerEmail: 'translate-android-support@google.com',
-  developerWebsite: 'http://support.google.com/translate',
-  developerAddress: '1600 Amphitheatre Parkway, Mountain View 94043',
-  developerLegalName: undefined,
-  developerLegalEmail: undefined,
-  developerLegalAddress: undefined,
-  developerLegalPhoneNumber: undefined,
-  privacyPolicy: 'http://www.google.com/policies/privacy/',
-  developerInternalID: '5700313618786177705',
-  genre: 'Tools',
-  genreId: 'TOOLS',
-  categories: [
-    { name: 'Tools', id: 'TOOLS' },
-    { name: 'Another category without id', id: null }
-  ],
-  icon: 'https://lh3.googleusercontent.com/ZrNeuKthBirZN7rrXPN1JmUbaG8ICy3kZSHt-WgSnREsJzo2txzCzjIoChlevMIQEA',
-  headerImage: 'https://lh3.googleusercontent.com/e4Sfy0cOmqpike76V6N6n-tDVbtbmt6MxbnbkKBZ_7hPHZRfsCeZhMBZK8eFDoDa1Vf-',
-  screenshots: [
-    'https://lh3.googleusercontent.com/dar060xShkqnJjWC2j_EazWBpLo28X4IUWCYXZgS2iXes7W99LkpnrvIak6vz88xFQ',
-    'https://lh3.googleusercontent.com/VnzidUTSWK_yhpNK0uqTSfpVgow5CsZOnBdN3hIpTxODdlZg1VH1K4fEiCrdUQEZCV0',
-  ],
-  video: undefined,
-  videoImage: undefined,
-  previewVideo: undefined,
-  contentRating: 'Everyone',
-  contentRatingDescription: undefined,
-  adSupported: false,
-  released: undefined,
-  updated: 1576868577000,
-  version: 'Varies with device',
-  recentChanges: 'Improved offline translations with upgraded language downloads',
-  comments: [],
-  preregister: false,
-  earlyAccessEnabled: false,
-  isAvailableInPlayPass: false,
-  editorsChoice: true,
-  features: [
-    {
-      title: 'Uses Google Play Games',
-      description: 'For automatic sign-in, leaderboards, achievements, and more.'
-    },
-    {
-      title: 'Achievements',
-      description: 'Grants you achievements for completing goals and skill-based challenges.'
-    }
-  ],
-  appId: 'com.google.android.apps.translate',
-  url: 'https://play.google.com/store/apps/details?id=com.google.android.apps.translate&hl=en&gl=us',
-  isAvailableInPlayPass: false
-}
+# 3. In a second terminal: the agent
+cd emoteIQ_Agent
+uv run python agent.py
 ```
 
-### list
-Retrieve a list of applications from one of the collections at Google Play. Options:
+Or open this top folder in VS Code, go to **Run and Debug**, pick **MCP Server + Agent** and press F5. The agent waits up to 30 s for the server to come up.
 
-* `collection` (optional, defaults to `collection.TOP_FREE`): the Google Play collection that will be retrieved. Available options can bee found [here](https://github.com/facundoolano/google-play-scraper/blob/b7669f78766b8306896447ddbe8797fe36eae49f/lib/constants.js#L67).
-* `category` (optional, defaults to no category): the app category to filter by. Available options can bee found [here](https://github.com/facundoolano/google-play-scraper/blob/b7669f78766b8306896447ddbe8797fe36eae49f/lib/constants.js#L10).
-* `age` (optional, defaults to no age filter): the age range to filter the apps (only for FAMILY and its subcategories). Available options are `age.FIVE_UNDER`, `age.SIX_EIGHT`, `age.NINE_UP`.
-* `num` (optional, defaults to 500): the amount of apps to retrieve.
-* `lang` (optional, defaults to `'en'`): the two letter language code used to retrieve the applications.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the applications.
-* `fullDetail` (optional, defaults to `false`): if `true`, an extra request will be made for every resulting app to fetch its full detail.
+> Start the server with `python -m emoteIQ_reviews.McpServer`, not `uv run emoteIQ-reviews`. On this PC, Windows Application Control blocks the `.exe` launcher that uv generates.
 
-Example:
+---
 
-```javascript
-import gplay from "google-play-scraper";
+## 2. The big picture
 
-gplay.list({
-    category: gplay.category.GAME_ACTION,
-    collection: gplay.collection.TOP_FREE,
-    num: 2
-  })
-  .then(console.log, console.log);
 ```
-Results:
-
-```javascript
- [ { url: 'https://play.google.com/store/apps/details?id=com.playappking.busrush',
-    appId: 'com.playappking.busrush',
-    summary: 'Bus Rush is an amazing running game for Android! Start running now!',
-    developer: 'Play App King',
-    developerId: '6375024885749937863',
-    title: 'Bus Rush',
-    icon: 'https://lh3.googleusercontent.com/R6hmyJ6ls6wskk5hHFoW02yEyJpSG36il4JBkVf-Aojb1q4ZJ9nrGsx6lwsRtnTqfA=w340',
-    score: 3.9,
-    scoreText: '3.9',
-    priceText: 'Free',
-    free: false },
-  { url: 'https://play.google.com/store/apps/details?id=com.yodo1.crossyroad',
-    appId: 'com.yodo1.crossyroad',
-    title: 'Crossy Road',
-    summary: 'Embark on an action arcade, endless runner journey!',
-    developer: 'Yodo1 Games',
-    developerId: 'Yodo1+Games',
-    icon: 'https://lh3.googleusercontent.com/doHqbSPNekdR694M-4rAu9P2B3V6ivff76fqItheZGJiN4NBw6TrxhIxCEpqgO3jKVg=w340',
-    score: 4.5,
-    scoreText: '4.5',
-    priceText: 'Free',
-    free: false } ]
+ emoteIQ_Agent   agent.py (CrewAI) + client.py (mcp SDK)
+       │   ▲
+       │   │   MCP over Streamable HTTP
+       │   │   POST http://127.0.0.1:8000/mcp
+       ▼   │   (tool results + progress messages)
+ ┌────────────────────────────────────────────────┐
+ │ emoteIQ_MCP  (one Python process)              │
+ │                                                │
+ │ McpServer/Tools.py   the 5 MCP tools           │
+ │      │                                         │
+ │      │ start_review_job → tasks.start(job)     │
+ │      ▼                                         │
+ │ Runner/   one background task per job          │
+ │ TaskManager → JobRunner → Fetcher → Batcher    │
+ │      │                                         │
+ │      ▼                                         │
+ │ Sources/GooglePlay ── HTTPS ──▶ Google Play    │
+ └──────┬─────────────────────────────────────────┘
+        │ writes                  ▲ get_batch and job_status read
+        ▼                         │
+  MongoDB   jobs · raw_pages · reviews · batches
+  Kafka     job.events · fetch.events · fetch.failures · parse.errors
 ```
 
-### search
-Retrieves a list of apps that results of searching by the given term. Options:
-
-* `term`: the term to search by.
-* `num` (optional, defaults to 20, max is 250): the amount of apps to retrieve.
-* `lang` (optional, defaults to `'en'`): the two letter language code used to retrieve the applications.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the applications.
-* `fullDetail` (optional, defaults to `false`): if `true`, an extra request will be made for every resulting app to fetch its full detail.
-* `price` (optional, defaults to `all`): allows to control if the results apps are free, paid or both.
-    * `all`: Free and paid
-    * `free`: Free apps only
-    * `paid`: Paid apps only
-
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.search({
-    term: "panda",
-    num: 2
-  }).then(console.log, console.log);
-```
-Results:
-
-```javascript
-[ { url: 'https://play.google.com/store/apps/details?id=com.snailgameusa.tp',
-    appId: 'com.snailgameusa.tp',
-    summary: 'An exciting action adventure RPG of Panda proportions!',
-    title: 'Taichi Panda',
-    developer: 'Snail Games USA',
-    developerId: 'Snail+Games+USA+Inc',
-    icon: 'https://lh3.googleusercontent.com/g8RMjpRk9yetsui4g5lxnioAFwtgoKUJDBnb2knJMrOaLOtHrwU1qYkb-PadbL0Zmg=w340',
-    score: 4.1,
-    scoreText: '4.1',
-    priceText: 'Free',
-    free: true },
-  { url: 'https://play.google.com/store/apps/details?id=com.sgn.pandapop.gp',
-    appId: 'com.sgn.pandapop.gp',
-    summary: 'Plan your every pop to rescue baby pandas from the evil Baboon!',
-    title: 'Panda Pop',
-    developer: 'SGN',
-    developerId: '5509190841173705883',
-    icon: 'https://lh5.ggpht.com/uAAUBzEHtD_-mTxomL2wFxb5VSdtNllk9M4wjVdTGMD8pH79RtWGYQYrrtfVTjq7PV7M=w340',
-    score: 4.2,
-    scoreText: '4.2',
-    priceText: 'Free',
-    free: true } ]
-```
-
-### developer
-Returns the list of applications by the given developer name. Options:
-
-* `devId`: the name of the developer.
-* `lang` (optional, defaults to `'en'`): the two letter language code in which to fetch the app list.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the applications. Needed when the app is available only in some countries.
-* `num` (optional, defaults to 60): the amount of apps to retrieve.
-* `fullDetail` (optional, defaults to `false`): if `true`, an extra request will be made for every resulting app to fetch its full detail.
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.developer({devId: "DxCo Games"}).then(console.log);
-```
-
-Results:
-```javascript
-[ { url: 'https://play.google.com/store/apps/details?id=com.dxco.pandavszombies2',
-    appId: 'com.dxco.pandavszombies2',
-    title: 'Panda vs Zombie 2 Panda\'s back',
-    summary: 'Help Rocky the Panda warrior to fight zombies again!',
-    developer: 'DxCo Games',
-    developerId: 'DxCo+Games',
-    icon: 'https://lh3.googleusercontent.com/kFco0LtC7ICP0QrtpkF-QQahU-iwuDgEsH0AClQcHwtzsO5-8BGTf8QgR6dlCLxqBLc=w340',
-    score: 3.9,
-    scoreText: '3.9',
-    priceText: 'Free',
-    free: true },
-  { url: 'https://play.google.com/store/apps/details?id=com.dxco.pandavszombies',
-    appId: 'com.dxco.pandavszombies',
-    title: 'Panda vs Zombie: panda ftw',
-    summary: 'Help Rocky the Panda warrior to fight zombie games and save the Panda kind.',
-    developer: 'DxCo Games',
-    developerId: 'DxCo+Games',
-    icon: 'https://lh6.ggpht.com/5mI27oolnooL__S3ns9qAf_6TsFNExMtUAwTKz6prWCxEmVkmZZZwe3lI-ZLbMawEJh3=w340',
-    score: 4.5,
-    scoreText: '4.5',
-    priceText: 'Free',
-    free: true } ]
-```
-
-### suggest
-Given a string returns up to five suggestion to complete a search query term. Options:
-
-* `term`: the term to get suggestions for.
-* `lang` (optional, defaults to `'en'`): the two letter language code used to retrieve the suggestions.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the suggestions.
-
-Example:
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.suggest({term: 'panda'}).then(console.log);
-```
-
-Results:
-```javascript
-[ 'panda pop',
-  'panda',
-  'panda games',
-  'panda run',
-  'panda pop for free' ]
-```
-### reviews
-Retrieves a page of reviews for a specific application.
-
-Note that this method returns reviews in a specific language (english by default), so you need to try different languages to get more reviews. Also, the counter displayed in the Google Play page refers to the total number of 1-5 stars ratings the application has, not the written reviews count. So if the app has 100k ratings, don't expect to get 100k reviews by using this method.
-
-You can get all reviews at once, by sending the `num` parameter (i.g. 5000), or paginated reviews (with 150 per page), by setting the `pagination` parameter to true;
-
-You`ll have to choose wich method is better for your use case.
-
-By setting `num` + `paginate`, the num parameter will be ignored and you will receive a paginated response instead.
-
-Options:
-
-* `appId`: Unique application id for Google Play. (e.g. id=com.mojang.minecraftpe maps to Minecraft: Pocket Edition game).
-* `lang` (optional, defaults to `'en'`): the two letter language code in which to fetch the reviews.
-* `country` (optional, defaults to `'us'`): the two letter country code in which to fetch the reviews.
-* `sort` (optional, defaults to `sort.NEWEST`): The way the reviews are going to be sorted. Accepted values are: `sort.NEWEST`, `sort.RATING` and `sort.HELPFULNESS`.
-* `num` (optional, defaults to `100`): Quantity of reviews to be captured.
-* `paginate` (optional, defaults to `false`): Defines if the result will be paginated
-* `nextPaginationToken` (optional, defaults to `null`): The next token to paginate
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-// This example will return 3000 reviews
-// on a single call
-gplay.reviews({
-  appId: 'com.dxco.pandavszombies',
-  sort: gplay.sort.RATING,
-  num: 3000
-}).then(console.log, console.log);
-
-// This example will return the first page with 150 reviews paginated
-// just send an empty nexPaginationToken
-// you will receive a nextPaginationToken parameter in your response
-gplay.reviews({
-  appId: 'com.dxco.pandavszombies',
-  sort: gplay.sort.RATING,
-  paginate: true,
-  nextPaginationToken: null // you can omit this parameter
-}).then(console.log, console.log);
-
-// This example will return 150 reviews paginated
-// for the next page (next page is the token return by the previous call)
-// you will receive a nextPaginationToken parameter in your response
-gplay.reviews({
-  appId: 'com.dxco.pandavszombies',
-  sort: gplay.sort.RATING,
-  paginate: true,
-  nextPaginationToken: 'TOKEN_FROM_THE_PREVIOUS_REQUEST' // you can omit this parameter
-}).then(console.log, console.log);
-```
-
-Results:
-
-```javascript
-{
-  data: [
-    {
-      id: 'gp:AOqpTOFmAVORqfWGcaqfF39ftwFjGkjecjvjXnC3g_uL0NtVGlrrqm8X2XUWx0WydH3C9afZlPUizYVZAfARLuk',
-      userName: 'Inga El-Ansary',
-      userImage: 'https://lh3.googleusercontent.com/-hBGvzn3XlhQ/AAAAAAAAAAI/AAAAAAAAOw0/L4GY9KrQ-DU/w96-c-h96/photo.jpg',
-      date: '2013-11-10T18:31:42.174Z',
-      score: 5,
-      scoreText: '5',
-      url: 'https://play.google.com/store/apps/details?id=com.dxco.pandavszombies&reviewId=Z3A6QU9xcFRPRWZaVHVZZ081NlNsRW9TV0hJeklGSTBvYTBTUlFQUUJIZThBSGJDX2s1Y1o0ZXRCbUtLZmgzTE1PMUttRmpRSS1YcFgxRmx1ZXNtVzlVS0Zz'
-      title: 'I LOVE IT',
-      text: 'It has skins and snowballs everything I wanted its so cool I love it!!!!!!!!',
-      replyDate: '2013-11-10T18:31:42.174Z',
-      replyText: 'thanks for playing Panda vs Zombies!',
-      version: '1.0.2',
-      thumbsUp: 29,
-      criterias: [
-        {
-          criteria: 'vaf_games_simple',
-          rating: 1
-        },
-        {
-          criteria: 'vaf_games_realistic',
-          rating: 1
-        },
-        {
-          criteria: 'vaf_games_complex',
-          rating: 1
-        }
-      ]
-    },
-    {
-      id: 'gp:AOqpTOF39mpW-6gurlkCCTV_8qnKne7O5wcFsLc6iGVot5hHpplqPCqIiVL2fjximXNujuMjwQ4pkizxGrn13x0',
-      userName: 'Millie Hawthorne',
-      userImage: 'https://lh5.googleusercontent.com/-Q_FTAEBH2Qg/AAAAAAAAAAI/AAAAAAAAAZk/W5dTdaHCUE4/w96-c-h96/photo.jpg',
-      date: '2013-11-10T18:31:42.174Z',
-      url: 'https://play.google.com/store/apps/details?id=com.dxco.pandavszombies&reviewId=Z3A6QU9xcFRPRmFHdlBFS2pGS2JVYW5Dd3kxTm1qUzRxQlYyc3Z4ZE9CYXRuc0hkclV3a09hbEFkOVdoWmw3eFN5VjF4cDJPLTg5TW5ZUjl1Zm9HOWc5NGtr',
-      score: 5,
-      scoreText: '5',
-      title: 'CAN NEVER WAIT TILL NEW UPDATE',
-      text: 'Love it but needs to pay more attention to pocket edition',
-      replyDate: null,
-      replyText: null,
-      version: null,
-      thumbsUp: 29
-      criterias: []
-    }
-  ],
-  nextPaginationToken: 'NEXT_PAGINATION_TOKEN'
-}
-```
-
-### similar
-Returns a list of similar apps to the one specified. Options:
-
-* `appId`: the Google Play id of the application to get similar apps for.
-* `lang` (optional, defaults to `'en'`): the two letter language code used to retrieve the applications.
-* `country` (optional, defaults to `'us'`): the two letter country code used to retrieve the applications.
-* `fullDetail` (optional, defaults to `false`): if `true`, an extra request will be made for every resulting app to fetch its full detail.
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.similar({appId: "com.dxco.pandavszombies"}).then(console.log);
-```
-
-Results:
-```javascript
-[ { url: 'https://play.google.com/store/apps/details?id=com.creative.rambo',
-    appId: 'com.creative.rambo',
-    summary: 'Rambo - The Mobile Game',
-    developer: 'Creative Distribution Ltd',
-    developerId: '8812103738509382093',
-    icon: '//lh3.googleusercontent.com/QDRAv7v4LSCfZgz3GIbOSz8Zj8rWqeeYuqqYiqyQXkxRJwG7vvUltzsFaWK5D7-JMnIZ=w340',
-    score: 3.3,
-    scoreText: '3.3',
-    priceText: '$2.16',
-    free: false } ]
-```
-
-### permissions
-Returns the list of permissions an app has access to.
-
-* `appId`: the Google Play id of the application to get permissions for.
-* `lang` (optional, defaults to `'en'`): the two letter language code in which to fetch the permissions.
-* `country` (optional, defaults to `'us'`): the two letter country code in which to fetch the permissions.
-* `short` (optional, defaults to `false`): if `true`, the permission names will be returned instead of
-permission/description objects.
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.permissions({appId: "com.dxco.pandavszombies"}).then(console.log);
-```
-
-Results:
-```javascript
-[ { permission: 'modify or delete the contents of your USB storage',
-    type: 'Storage' },
-  { permission: 'read the contents of your USB storage',
-    type: 'Storage' },
-  { permission: 'full network access',
-    type: 'Photos/Media/Files' },
-  { permission: 'view network connections',
-    type: '' } ]
-```
-
-### datasafety
-Returns the data safety information of an application. The data safety is categorized into lists of "data shared",
-"data collected" and "security practices". Addtionally, the URL to the privacy policy is returned.
-
-* `appId`: the Google Play id of the application to get permissions for.
-* `lang` (optional, defaults to `'en'`): the two letter language code in which to fetch the permissions.
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.datasafety({appId: "com.dxco.pandavszombies"}).then(console.log);
-```
-
-Results:
-```javascript
-{ dataShared: [
-    {
-      data: 'User IDs',
-      optional: false,
-      purpose: 'Advertising or marketing, Account management',
-      type: 'Personal info'
-    },
-    {
-      data: 'Crash logs',
-      optional: false,
-      purpose: 'Analytics',
-      type: 'App info and performance'
-    }
-  ],
-  dataCollected: [
-    {
-      data: 'Name',
-      optional: true,
-      purpose: 'App functionality, Developer communications, Advertising or marketing',
-      type: 'Personal info'
-    },
-    {
-      data: 'Email address',
-      optional: true,
-      purpose: 'App functionality, Advertising or marketing, Account management',
-      type: 'Personal info'
-    },
-    {
-      data: 'User IDs',
-      optional: false,
-      purpose: 'App functionality, Analytics, Developer communications, Advertising or marketing, Fraud prevention, security, and compliance, Personalization, Account management',
-      type: 'Personal info'
-    },
-    {
-      data: 'Purchase history',
-      optional: true,
-      purpose: 'Account management',
-      type: 'Financial info'
-    },
-    {
-      data: 'Other in-app messages',
-      optional: false,
-      purpose: 'Developer communications, Fraud prevention, security, and compliance',
-      type: 'Messages'
-    },
-    {
-      data: 'Contacts',
-      optional: true,
-      purpose: 'App functionality',
-      type: 'Contacts'
-    },
-    {
-      data: 'Other actions',
-      optional: false,
-      purpose: 'App functionality, Analytics, Fraud prevention, security, and compliance',
-      type: 'App activity'
-    },
-    {
-      data: 'Crash logs',
-      optional: true,
-      purpose: 'App functionality, Analytics',
-      type: 'App info and performance'
-    },
-    {
-      data: 'Other app performance data',
-      optional: false,
-      purpose: 'Analytics',
-      type: 'App info and performance'
-    },
-    {
-      data: 'Device or other IDs',
-      optional: false,
-      purpose: 'App functionality, Analytics, Advertising or marketing, Fraud prevention, security, and compliance, Personalization, Account management',
-      type: 'Device or other IDs'
-    }
-  ],
-  securityPractices: [
-    {
-      practice: 'Data isn’t encrypted',
-      description: 'Your data isn’t transferred over a secure connection'
-    },
-    {
-      practice: 'You can request that data be deleted',
-      description: 'The developer provides a way for you to request that your data be deleted'
-    }
-  ],
-  privacyPolicyUrl: 'http://www.jamcity.com/privacy' }
-```
-
-### categories
-Retrieve a full list of categories present from dropdown menu on Google Play.
-
-* this method has no options
-
-Example:
-
-```javascript
-import gplay from "google-play-scraper";
-
-gplay.categories().then(console.log);
-```
-
-Results:
-```javascript
-[ 'AUTO_AND_VEHICLES',
-  'LIBRARIES_AND_DEMO',
-  'LIFESTYLE',
-  'MAPS_AND_NAVIGATION',
-  'BEAUTY',
-  'BOOKS_AND_REFERENCE',
-  ...< 51 more items> ]
-```
-
-## Memoization
-
-Since every library call performs one or multiple requests to
-an Google Play API or web page, sometimes it can be useful to cache the results
-to avoid requesting the same data twice. The `memoized` function returns a
-store object that caches its results:
-
-```js
-import {memoized as m} from "google-play-scraper"; // cache with default options
-const memoized = m();// cache with customized options
-const memoizedCustom = m({ maxAge: 1000 * 60 });// cache with customized options
-
-// first call will hit google play and cache the results
-memoized.developer({devId: "DxCo Games"}).then(console.log);
-
-// second call will return cached results
-memoized.developer({devId: "DxCo Games"}).then(console.log);
-```
-
-The options available are those supported by the [memoizee](https://github.com/medikoo/memoizee) module.
-By default up to 1000 values are cached by each method and they expire after 5 minutes.
-
-## Throttling
-
-All methods on the scraper have to access the Google Play server in one
-form or another. When making too many requests in a short period of time
-(specially when using the `fullDetail` option), it is common to hit Google Play's
-throttling limit. That means requests start getting status 503 responses with
-a captcha to verify if the requesting entity is a human (which is not :P).
-In those cases the requesting IP can be banned from making further requests for a
-while (usually around an hour).
-
-To avoid this situation, all methods now support a `throttle` property, which
-defines an upper bound to the amount of requests that will be attempted per second.
-Once that limit is reached, further requests will be held until the second passes.
-
-```js
-import gplay from "google-play-scraper";
-
-// the following method will perform batches of 10 requests per second
-gplay.search({term: 'panda', throttle: 10}).then(console.log);
-```
-
-By default, no throttling is applied.
+The two halves of the server never call each other directly:
+
+- **The job runner** (background task) *writes* pages, reviews and batches to MongoDB.
+- **The tools** (`get_batch`, `job_status`) *read* them from MongoDB.
+
+That is why a batch the agent asks for is usually already waiting: the runner works up to 2 pages ahead.
+
+---
+
+## 3. What happens in one job, step by step
+
+Example: the agent asks for 1,000 Brawl Stars reviews, 50 per batch. File paths are relative to `emoteIQ_MCP/src/emoteIQ_reviews/`.
+
+### Step 1: the agent starts a job
+`start_review_job(source="Google Play", filters={"app_id": "com.supercell.brawlstars"}, limit=1000, batch_size=50)`
+
+| Where | What happens |
+|---|---|
+| [McpServer/Tools.py](emoteIQ_MCP/src/emoteIQ_reviews/McpServer/Tools.py) `start_review_job` | Checks `batch_size` (1–200). |
+| [Sources/\_\_init\_\_.py](emoteIQ_MCP/src/emoteIQ_reviews/Sources/__init__.py) `get_source` | `"Google Play"` → `GooglePlaySource`. |
+| [Sources/GooglePlay/GooglePlayFilters.py](emoteIQ_MCP/src/emoteIQ_reviews/Sources/GooglePlay/GooglePlayFilters.py) | Validates the filters, fills defaults (`lang=en`, `country=us`, `sort=NEWEST`), rejects unknown keys and `stars` + `sentiment` together. |
+| [Storage/Jobs.py](emoteIQ_MCP/src/emoteIQ_reviews/Storage/Jobs.py) `create_job` | Saves the job document (`status: running`, id from `ObjectId()`). |
+| [Runner/TaskManager.py](emoteIQ_MCP/src/emoteIQ_reviews/Runner/TaskManager.py) `tasks.start` | Starts the job runner as a background asyncio task. |
+| Tool returns | `{"job_id": "...", "status": "running", ...}` right away. Fetching goes on in the background. |
+
+### Step 2: the runner loads the job
+[Runner/JobRunner.py](emoteIQ_MCP/src/emoteIQ_reviews/Runner/JobRunner.py) `JobRunner.load` then `run()`
+
+- Reads the job back from MongoDB, picks the source and its config (page size 150, 3 retries).
+- Rebuilds the **batcher**. For a new job it is empty. After a crash it rebuilds the reviews that were fetched but not yet batched from `raw_pages` (`Storage/RawPages.py` `pending_review_ids`) and continues batch numbering.
+- Picks the token to start from: its own `continuation_token`, or the parent's token for a continuation, or none (page 1).
+- Logs `job.events: started` to Kafka.
+
+### Step 3: the page loop, once per Google page
+`JobRunner.run_pages`, repeated until `limit` is reached or Google has no more reviews:
+
+1. **`wait_for_reader`**: pauses while `fetched − served_batches × batch_size ≥ 2 × 150` (the agent is 2 pages behind). Also stops if someone cancelled the job.
+2. **Size the request:** `count = min(150, limit − fetched)`. The last page asks for exactly what is left, so the saved token points at the next unread review.
+3. **Fetch with retries:** [Runner/Fetcher.py](emoteIQ_MCP/src/emoteIQ_reviews/Runner/Fetcher.py) `fetch_with_retries`
+   - `GooglePlaySource.fetch_page` → [GooglePlayClient.py](emoteIQ_MCP/src/emoteIQ_reviews/Sources/GooglePlay/GooglePlayClient.py) `fetch_page` → [GooglePlayRequest.py](emoteIQ_MCP/src/emoteIQ_reviews/Sources/GooglePlay/GooglePlayRequest.py) `build_request` (URL + `f.req` body) → `AsyncSession.post` (curl_cffi, one session per job so cookies carry across pages).
+   - [GooglePlayParser.py](emoteIQ_MCP/src/emoteIQ_reviews/Sources/GooglePlay/GooglePlayParser.py) `read_page` (strip `)]}'`, find the `wrb.fr` frame, parse the JSON inside the string) → `parse_review` for each review → common `Review` model.
+   - [Runner/Classify.py](emoteIQ_MCP/src/emoteIQ_reviews/Runner/Classify.py) `classify` names the result (see the table below). Retryable results wait 1 s, 2 s, 4 s and try again.
+   - Every attempt is logged to `fetch.events`.
+4. **Store the page:** `JobRunner.store_page`, always in this order:
+   1. `save_raw_page`: the exact response text, its position (`start_pos`, `count`), tokens and review IDs → `raw_pages`
+   2. `save_reviews`: upsert by review ID → `reviews`
+   3. `batcher.add` ([Runner/Batcher.py](emoteIQ_MCP/src/emoteIQ_reviews/Runner/Batcher.py)) cuts full batches of 50; `save_batch` → `batches`
+   4. `save_progress`: the checkpoint (`fetched`, `batched`, `pages`, new token) → `jobs`
+
+What the runner does with each page result:
+
+| Result (`Outcome`) | Retried? | What the runner does |
+|---|---|---|
+| `ok`: reviews + next token | – | Store page, loop again |
+| `end`: reviews, no token | – | Store page, job **completed** (Google has no more) |
+| limit reached | – | Store page, job **completed**, token kept for continuing |
+| `empty` on page 1 | once | Job **completed** with 0 reviews (no matching reviews, or the app doesn't exist) |
+| `empty` on a later page | 3× | Still empty → job **blocked**, token kept |
+| `http_error` (429/403/5xx) | 3× | Still failing → job **blocked**, token kept |
+| `network_error` (timeout etc.) | 3× | Still failing → job **blocked**, token kept |
+| `parse_error` (Google changed the format) | no | Raw response saved, job **failed** |
+
+### Step 4: the agent reads batches (at the same time as step 3)
+`get_batch(job_id, 1)`, `get_batch(job_id, 2)`, ... in [McpServer/Tools.py](emoteIQ_MCP/src/emoteIQ_reviews/McpServer/Tools.py) `get_batch`
+
+- Looks up the batch document `"<job_id>:<batch_no>"` in `batches`.
+- **Not there yet** → checks again every second for up to 20 s, sending MCP progress messages (`Fetching reviews: 450 of 1000`). After 20 s it returns `ready: false`, "call again".
+- **There** → loads the reviews by ID (`Storage/Reviews.py` `get_reviews`), keeps only `id`, `score`, `text`, `date`, and calls `mark_served` (this lets the runner fetch further).
+- **`last_batch`** is `true` when the job has stopped and this is its highest batch number. Asking for a number past the end returns `"has only N batch(es)"` with `last_batch: true`.
+
+### Step 5: the job finishes
+`JobRunner.finish`
+
+1. Flushes leftover reviews into a last, shorter batch (always, even when blocked or cancelled).
+2. Saves the final checkpoint and token.
+3. `finish_job`: sets `status`, `blocker` or `error`, `completed_at`, and `expires_at` (+90 days).
+4. Starts the 7-day TTL on the job's batches and raw pages.
+5. Kafka: `job.events: <status>`; plus `fetch.failures` (full token, filters, reason) when blocked, or `parse.errors` when failed.
+
+### Step 6 (optional): more reviews, retry, status
+- **More reviews:** `start_review_job(parent_job_id="<finished job>", limit=500)`. The server first **claims** the parent atomically (`Storage/Jobs.py` `claim_parent`: only one child per parent, the parent must be finished and have a token), then creates the child with the parent's filters and token. The child continues exactly where the parent stopped.
+- **Blocked job:** `retry_failed(job_id)` reopens it (`reopen_job`), cancels its TTLs and starts the runner again. Batch numbers continue after the last one.
+- **Anytime:** `job_status(job_id)` shows progress, the blocker or error, and `can_continue`.
+
+### Server start and stop
+[McpServer/Server.py](emoteIQ_MCP/src/emoteIQ_reviews/McpServer/Server.py) `lifespan`, once per server run:
+- **Start:** create MongoDB indexes → connect Kafka → **resume every job still `running`** (after a crash or restart they continue from their checkpoint).
+- **Stop:** cancel running jobs (they stay `running` in MongoDB and resume next start), close Kafka and MongoDB.
+
+---
+
+## 4. MCP tools
+
+| Tool | Purpose |
+|---|---|
+| `list_sources` | Sources and the JSON schema of their filters, plus batch-size limits |
+| `start_review_job` | New job (`source` + `filters` + `limit` + `batch_size`) or continuation (`parent_job_id` + `limit`) |
+| `get_batch` | One batch by number; waits up to 20 s; `last_batch` tells the agent to stop |
+| `job_status` | Status, progress, blocker/error, `can_continue`, chain (`parent_job_id`, `root_job_id`, `continued_by`) |
+| `retry_failed` | Restart a blocked or failed job from its checkpoint |
+
+Google Play filters: `app_id` (required), `lang`, `country`, `sort` (`NEWEST` / `RATING` / `HELPFULNESS`), `stars` (one value 1–5) **or** `sentiment` (1 positive = 4–5★, 2 critical = 1–3★).
+
+---
+
+## 5. Where the data goes
+
+**MongoDB** (database `EmoteIQ`)
+
+| Collection | `_id` | Holds | Deleted |
+|---|---|---|---|
+| `jobs` | ObjectId string | filters, limit, batch size, status, tokens, progress, blocker | 90 days after finishing |
+| `raw_pages` | `<job_id>:<page_no>` | exact Google response, `start_pos`, `count`, tokens, review IDs | 7 days after finishing |
+| `reviews` | `google_play:<review id>` | common review shape (author, score, text, UTC date, reply, extra) | never (shared by all jobs) |
+| `batches` | `<job_id>:<batch_no>` | ordered review IDs | 7 days after finishing |
+
+Every write is an upsert on a predictable `_id`, so a page fetched twice after a crash overwrites the same documents instead of duplicating them.
+
+**Kafka** (falls back to `logs/events-fallback.jsonl` if Kafka is down)
+
+| Topic | When | Key |
+|---|---|---|
+| `job.events` | started, completed, blocked, failed, cancelled | `root_job_id` |
+| `fetch.events` | every request to Google, every retry | `job_id` |
+| `fetch.failures` | a page still failing after retries: full token + filters + reason | `job_id` |
+| `parse.errors` | a response that could not be parsed | `job_id` |
+
+---
+
+## 6. Debugging: where to put breakpoints
+
+Use the **MCP Server + Agent** debug config, then break at:
+
+| To see | Breakpoint |
+|---|---|
+| What the agent sends | `emoteIQ_Agent/agent.py` the tool functions (`start_review_job`, `get_review_batch`) |
+| A tool call arriving at the server | `McpServer/Tools.py` `start_review_job` / `get_batch` |
+| Each loop turn of a job | `Runner/JobRunner.py` `run_pages`, the `fetch_with_retries` line |
+| The exact request to Google | `Sources/GooglePlay/GooglePlayRequest.py` end of `build_request` (look at `inner`) |
+| The raw response | `Sources/GooglePlay/GooglePlayClient.py` after `session.post` (`response.text`) |
+| How one review is mapped | `Sources/GooglePlay/GooglePlayParser.py` `parse_review` |
+| How batches are cut | `Runner/Batcher.py` `add` |
+| Why a job stopped | `Runner/JobRunner.py` `finish` (look at `stop`) |
+
+Logs to watch while it runs (run the `docker exec` commands in PowerShell; Git Bash rewrites `/opt/...` into a Windows path and they fail):
+- **Agent terminal:** `===== LLM CALL #n` (prompts and answers), `>>>>> TOOL START` / `<<<<< TOOL DONE` / `!!!!! TOOL ERROR`, `[mcp] ...` (raw MCP calls) and `[mcp progress]`.
+- **Server terminal:** startup, and one `POST /mcp` line per tool call.
+- **Kafka:** `docker exec -it emoteiq_mcp-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic fetch.events --from-beginning`
+- **MongoDB:** `docker exec -it emoteiq_mcp-mongo-1 mongosh EmoteIQ --eval "db.jobs.find().sort({created_at:-1}).limit(1)"`
+
+---
+
+## 7. Configuration
+
+All settings have defaults; override them in `emoteIQ_MCP/.env` or as environment variables.
+
+| Setting | Env variable | Default |
+|---|---|---|
+| MongoDB URI / database | `EMOTEIQ_MONGO_URI` / `EMOTEIQ_MONGO_DB` | `mongodb://localhost:27017` / `EmoteIQ` |
+| Kafka | `EMOTEIQ_KAFKA_BOOTSTRAP` | `localhost:9092` |
+| Server address | `EMOTEIQ_MCP_HOST` / `EMOTEIQ_MCP_PORT` | `127.0.0.1` / `8000` |
+| Batch size default / min / max | `EMOTEIQ_DEFAULT_BATCH_SIZE` / `..._MIN_...` / `..._MAX_...` | 50 / 1 / 200 |
+| Pages fetched ahead of the agent | `EMOTEIQ_FETCH_AHEAD_PAGES` | 2 |
+| `get_batch` wait | `EMOTEIQ_GET_BATCH_WAIT_S` | 20 |
+| TTL jobs / batches / raw pages (days) | `EMOTEIQ_JOBS_TTL_DAYS` / `EMOTEIQ_BATCHES_TTL_DAYS` / `EMOTEIQ_RAW_PAGES_TTL_DAYS` | 90 / 7 / 7 |
+| Google Play page size, timeout, retries | `EMOTEIQ_GOOGLE_PLAY_PAGE_SIZE` / `..._REQUEST_TIMEOUT_S` / `..._MAX_RETRIES` | 150 / 15 / 3 |
+| curl_cffi browser profile | `EMOTEIQ_GOOGLE_PLAY_IMPERSONATE` | `chrome120` |
+
+Code: `Config/BaseConfig.py` (app + shared source fields), `Config/GooglePlayConfig.py`, `Config/__init__.py` (`app_config`, `get_source_config`).
+
+---
+
+## 8. Adding a new source (for example YouTube)
+
+1. `Config/Source.py`: add `YOUTUBE = "..."`.
+2. `Config/YouTubeConfig.py`: `class YouTubeConfig(SourceConfig)` with its own env prefix; register it in `Config/__init__.py`.
+3. `Sources/YouTube/`: filters model, request, client, parser, and `YouTubeSource(BaseSource)` returning `PageResult`.
+4. `Sources/__init__.py`: add it to `_SOURCES`.
+
+The runner, storage, Kafka events and MCP tools don't change. `list_sources` shows the new source automatically.
+
+---
+
+## 9. Known limits
+
+- **One server process only.** Two processes would both resume the same `running` jobs. Running several needs a lease per job.
+- **No authentication.** Fine on `127.0.0.1`; add auth before exposing the server.
+- **Google Play's `batchexecute` is an internal endpoint.** It can change without notice (it already moved from `UsvDTd` to `oCPfdb`). Keep request rates polite and check the terms-of-service position before running at scale.
+- **Agent issues seen in the end-to-end run (not fixed yet):**
+  - `stars` in the agent's `start_review_job` tool is treated as required by CrewAI 1.6.1, so the first calls fail until the model sends `stars: null`.
+  - On longer runs `qwen2.5:14b` loses track (re-reads batches, skips parts of the report), probably Ollama's default context window. Raising `num_ctx` or letting a CrewAI Flow drive the batch loop should help.
+  - CrewAI prints "Service Unavailable ... exporting spans" at the end: its own telemetry, harmless.
+- **No automated tests yet** (`emoteIQ_MCP/tests/` is empty); everything so far was checked with one-off scripts.

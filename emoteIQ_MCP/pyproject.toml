@@ -1,0 +1,37 @@
+[project]
+name = "emoteIQ-reviews"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Rishab Sharma", email = "rishab.sharma@testingxperts" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "aiokafka>=0.14.0",
+    "curl-cffi>=0.16.3",
+    "mcp>=2.2.0",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "pymongo>=4.18.2",
+]
+
+[project.scripts]
+emoteIQ-reviews = "emoteIQ_reviews.McpServer.Server:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "emoteIQ_reviews"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

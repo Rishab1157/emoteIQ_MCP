@@ -1,0 +1,13 @@
+[project]
+name = "emoteiq-agent"
+version = "0.1.0"
+description = "CrewAI agent that reads app reviews from the emoteIQ reviews MCP server"
+readme = "README.md"
+authors = [
+    { name = "Rishab Sharma", email = "rishab.sharma@testingxperts" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "crewai[litellm]>=1.6.1",
+    "mcp>=2.2.0",
+]
